@@ -2,7 +2,7 @@
 
 Problemas encontrados en la réplica que no estaban en la documentación. Cada uno indica qué se vio, cómo se detectó, su impacto en el negocio, cómo se resuelve en el pipeline y qué se escalaría al dueño del origen.
 
-> Estado: **borrador** a partir del perfilado de `carga_1`. Se actualiza con cada entrega nueva.
+> A partir del perfilado de `carga_1`. Se actualiza con cada entrega nueva.
 > Reproducible con `python scripts/profile_table.py <csv> --pk <columnas>`.
 
 ## Resumen

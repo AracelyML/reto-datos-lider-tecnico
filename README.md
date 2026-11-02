@@ -1,79 +1,206 @@
-# Reto — Líder técnico de Ingeniería de Datos · Grupo DEACERO
+# Workspace agéntico de ingeniería de datos — Logística
 
-## Antes de empezar
+Este repositorio contiene mi solución al reto de Líder Técnico de Datos. Desarrollé un agente con opencode y Google Gemini (plan gratuito) que toma las tablas replicadas por Airbyte con CDC y las lleva hasta los marts de Logística, siguiendo un estándar de calidad de producción.
 
-- **Qué hay en esta carpeta:** este `README.md` (las instrucciones), `docs/` (la documentación del negocio y del sistema origen) y `data/replica/carga_1/` (los datos, en CSV).
-- **Los datos son ficticios.** Se generaron para este reto: no corresponden a clientes, operaciones ni cifras reales.
-- **Plazo: 10 días naturales**, contados a partir del día en que recibes este archivo. Es el tiempo máximo para enviar el link de tu repositorio. Dedicación esperada: alrededor de **30 a 40 horas**.
-- **Qué necesitas:** una computadora con Python 3.9 o superior, Git y una cuenta de GitHub. Todo lo demás es gratis y se instala desde Python. GitHub Actions y los environments de GitHub son gratis en repositorios públicos. Para el LLM usa un plan gratuito, sin tarjeta.
-- **Cómo entregas:** responde al correo con el que recibiste este archivo con el **link a tu repositorio público**. Solo el link: no adjuntes archivos.
-- **No hay canal de dudas, a propósito.** Si algo es ambiguo, toma la decisión que te parezca más razonable, escríbela en una sección **Supuestos** de tu `README.md` y sigue adelante. Cómo resuelves la ambigüedad también es parte de la evaluación.
+Mi principal criterio de diseño fue que el resultado no dependiera de que el modelo recordara las reglas. Con un modelo pequeño eso no es confiable; durante las pruebas lo comprobé en varias ocasiones. Por esa razón, las reglas están implementadas en macros, tests, contratos de dbt, permisos del agente y configuración de GitHub. Si el agente comete un error, alguna de esas piezas falla y el error queda visible.
 
-## El problema
+La persona del equipo le indica al agente qué necesita, por ejemplo "llegó una entrega", "el tablero se ve raro" o "llegó esta tabla y Logística requiere este indicador". El agente ingiere, ejecuta dbt, perfila, diagnostica y abre el pull request. No hace merge ni ejecuta operaciones destructivas.
 
-Replicamos decenas de sistemas operativos a la nube. **Después de la réplica no hay un estándar de trabajo.** Cada persona modela, prueba y entrega como se le ocurre: unos deduplican el CDC y otros no, unos prueban y otros solo corren, unos documentan y otros no. El resultado son marts que cuadran "más o menos" y que nadie se atreve a certificar.
+El enunciado original del reto se encuentra en [`docs/reto.md`](docs/reto.md).
 
-No buscamos a alguien que construya un mart más. Buscamos a alguien que haga que **todo el equipo construya marts bien, sin tener que saber cómo**.
+## Contenido
 
-## Lo que queremos
+1. [Cómo ejecutarlo](#1-cómo-ejecutarlo)
+2. [Frontera humana en un fork](#2-frontera-humana-en-un-fork)
+3. [Qué se le puede pedir al agente](#3-qué-se-le-puede-pedir-al-agente)
+4. [El estándar](#4-el-estándar)
+5. [Decisiones](#5-decisiones)
+6. [Supuestos](#6-supuestos)
+7. [Evidencia](#7-evidencia)
+8. [Alcance no cubierto](#8-alcance-no-cubierto)
 
-Crea, en un repositorio **público** de tu GitHub y con CI/CD, un **workspace agéntico de ingeniería de datos**. Es un agente, con el contexto, las skills, las herramientas (MCP) y las validaciones que tú decidas, que **sabe qué hacer y cómo hacerlo**. Una persona del equipo le pide: *"llega esta tabla replicada, el negocio necesita esto"*. El agente la lleva hasta un mart con calidad de producción siguiendo **tu** estándar, sin que esa persona le explique el cómo.
+## 1. Cómo ejecutarlo
 
-Usa el agente que quieras (opencode, Claude Code, Codex, Aider…) con un LLM **gratis** (Groq, Gemini, OpenRouter, un modelo local). La llave va por variable de entorno, porque nosotros lo vamos a correr con la nuestra. Indica en el README qué proveedor y modelo usaste: los planes gratuitos tienen límites de uso, y tu diseño tiene que funcionar dentro de ellos.
+Requisitos: Python 3.9 o superior (lo probé con 3.12), Git, [opencode](https://opencode.ai) 1.19.x, una llave gratuita de Gemini ([Google AI Studio](https://aistudio.google.com/apikey), no requiere tarjeta) y, para la frontera humana, [`gh`](https://cli.github.com) autenticado.
 
-**La idea de fondo: el agente opera el pipeline; tú no lo corres a mano.** Como mínimo debe poder:
+```bash
+make setup                       # crea .venv e instala dbt-core + dbt-duckdb
+make run                         # ingiere data/replica/*, dbt build (modelos + tests), conteos
+make run                         # segunda ejecución: todo omitido, mismos conteos
+```
 
-- ingerir una entrega nueva de la réplica;
-- correr dbt;
-- perfilar una tabla;
-- diagnosticar una falla;
-- abrir un PR con el fix.
+Conteos esperados con `carga_1`:
 
-## El material
+| Tabla | Filas |
+|---|---|
+| `staging.stg_fle__viajes` | 1,881 |
+| `staging.stg_fle__viaje_partidas` | 3,960 |
+| `staging.stg_fle__entregas` | 1,714 |
+| `staging.stg_opc__plantas` | 4 |
+| `staging.stg_vta__clientes_versiones` | 106 |
+| `silver_logistica.int_clientes__segmento_vigencia` | 106 |
+| `gold_logistica.fct_embarques` | 1,773 |
+| `gold_logistica.fct_embarque_partidas` | 3,683 |
+| `mart_logistica.embarques_mensual` | 24 |
+| `mart_logistica.cumplimiento_entrega` | 24 |
 
-En `data/replica/carga_1/` está la primera entrega de una réplica **Airbyte CDC** desde SQL Server: cinco tablas de fletes, clientes y plantas, todas en texto. Así nos llegan de verdad, con todo lo que eso implica. En `docs/` está lo que el negocio y los dueños del origen nos dieron: el requerimiento, un diccionario y nuestras convenciones de capas. Úsalos con el mismo criterio con que usarías documentación real.
+### El agente
 
-El caso de ejemplo es el requerimiento de `docs/requerimiento-negocio.md`: dos marts que Logística necesita para su tablero. Tu agente debe construirlos, y ese resultado es la **evidencia de que tu estándar funciona**. El producto que evaluamos es el estándar.
+```bash
+export GEMINI_API_KEY=<tu llave>   # o GOOGLE_GENERATIVE_AI_API_KEY
+make agent
+```
 
-Todo corre local con dbt sobre DuckDB. En producción el destino es BigQuery: diséñalo pensando en eso.
+- Proveedor y modelo: Google Gemini, `google/gemini-3.5-flash-lite`, plan gratuito con límites de 15 peticiones por minuto, 250K tokens por minuto y 500 peticiones por día. En mis pruebas, una tarea completa consumió entre 15 y 30 peticiones, lo que permite de 15 a 25 tareas diarias. La justificación de esta elección está en el [ADR 001](docs/adr/001-agente-y-modelo.md).
+- Para usar otro modelo: `opencode -m <proveedor>/<modelo>`, o modificar `model` en `opencode.json`.
+- `make agent` desactiva el contexto y las skills globales de la máquina, de modo que el agente se comporta igual en cualquier equipo.
+- Cuando el proveedor se satura, opencode reintenta sin avisar y parece que continúa trabajando. En ese caso conviene revisar `~/.local/share/opencode/log/opencode.log`.
 
-## Las reglas duras
+### Comandos disponibles
 
-- **Las entregas de la réplica se acumulan.** Cada una trae registros nuevos y cambios a los anteriores. Ingerir la misma entrega dos veces, o correr todo dos veces seguidas, **no duplica nada**.
-- **Cualquier cosa destructiva pasa por aprobación humana** en un *environment* de GitHub. Eso incluye full-refresh, borrar o recrear tablas publicadas fuera de la corrida normal del pipeline y cambiar el contrato de un mart, que rompe los tableros. Funciona como un 2FA: el agente propone la operación y explica su impacto, pero no la ejecuta. **Si el agente puede tirar tablas solo, no cuenta.** Tú decides dónde está la frontera, y queremos saber por qué la pusiste ahí.
-- **Los marts publicados tienen contrato:** tipos y grano. Nadie los rompe sin aprobación.
-- **Al menos dos tests que atrapen una regla de negocio real** del requerimiento, no solo `unique` y `not_null`. Si un test nunca podría fallar, no cuenta.
-- **Cero secretos en el repo. Cero costo:** free tier, sin tarjeta.
-- Déjanos un **`make chaos`** que rompa algo a propósito y demuestre que tu agente lo detecta, lo explica y lo arregla.
+Son los mismos que utiliza el agente:
 
-## Cómo lo vamos a evaluar
+| Comando | Para qué sirve |
+|---|---|
+| `make ingest` / `make build` / `make run` / `make counts` | Ingerir; construir y probar; ambos; conteos por tabla |
+| `make diagnose` | `dbt build` y resumen JSON de fallas: regla, capa, linaje, muestra y cambios sin commit |
+| `make profile TABLE=<csv o esquema.tabla> PK=<cols>` | Perfil de una tabla: duplicados, versiones CDC, borrados, fechas centinela y códigos sucios |
+| `python scripts/query.py "<select>"` | Consulta de solo lectura, máximo 50 filas |
+| `make sandbox` / `make sandbox-fin` | Crea o elimina una copia de la base para pruebas; la base real no se modifica |
+| `make chaos [ESCENARIO=...]` | Inyecta un defecto del origen en la copia (ver sección 3) |
+| `make simular` | Carga una entrega simulada (`carga_2`) en la copia |
 
-No vamos a leer tu código primero. Vamos a **usar tu agente**, con nuestra llave y sin hablar contigo:
+## 2. Frontera humana en un fork
 
-1. Clonamos, seguimos tu README y corremos todo **dos veces**. Contamos filas.
-2. Le damos **nuevas entregas de la réplica**, con lo que traen las réplicas reales. Vemos si los marts siguen correctos.
-3. Corremos **nuestro propio chaos**, distinto al tuyo. Queremos que el agente nos diga el **mecanismo** de la falla, no que nos repita el stack trace, y que proponga el fix como PR.
-4. Le pedimos **una fuente que nunca viste y un requerimiento nuevo**, sin explicarle nada más de lo que le explicaría una persona del equipo. Aquí se ve si hiciste un estándar o si solo resolviste este dataset.
-5. Intentamos que haga algo destructivo sin aprobación.
+Los environments, la protección de `main` y las variables de GitHub no se copian al hacer un fork. Deben configurarse una vez, con permisos de administrador:
 
-Después sí leemos: dónde pusiste la frontera humana y por qué, qué decidiste que va como contexto, qué como skill y qué como validación que no dependa de que el agente "se acuerde", y qué problemas de los datos encontraste que nadie te dijo.
+```bash
+gh auth login
+bash scripts/setup_github.sh            # o: bash scripts/setup_github.sh <owner>/<repo>
+```
 
-## Además: proponer y gestionar
+El script habilita Actions y crea dos environments: `production`, con la variable `APROBACION_DESTRUCTIVA`, y `contract-change`. En ambos queda como revisor el usuario que ejecuta el script. También protege `main`: solo acepta cambios por pull request, exige los checks `idempotencia`, `secretos` y `aprobacion`, y no permite force push, ni siquiera a administradores.
 
-Un líder técnico no solo construye el estándar: lo lleva al equipo. Agrega a tu repositorio:
+Para comprobar que la frontera funciona:
 
-- **`PROPUESTA.md`**: cómo adoptarías este estándar en un equipo de 6 personas que mantiene decenas de fuentes replicadas. Qué estandarizas primero y por qué, un plan por fases para los primeros 90 días, cómo sabrías que funciona (métricas que se puedan medir) y cómo cambia el diseño en BigQuery con cientos de millones de filas, incluido el costo.
-- **Decisiones (ADR)** para las 3 a 5 decisiones más importantes que tomaste: contexto, alternativas, decisión y consecuencias.
+1. Pedirle al agente un full-refresh. Lo máximo que puede hacer es lanzar `destructive.yml`, que queda en *Waiting for review* hasta que alguien lo apruebe en Actions → la ejecución → Review deployments → production.
+2. Abrir un pull request que modifique `models/marts/`. El check `aprobacion` queda pendiente hasta que se aprueba `contract-change`.
+3. En local, `make full-refresh` termina con el mensaje "full-refresh bloqueado", porque falta la variable que solo recibe un job aprobado.
 
-Después de evaluar tu entrega tendremos una **sesión en vivo de 90 minutos**: presentas tu propuesta, resolvemos juntos una situación del día a día de un equipo de datos y defiendes tus decisiones. No necesitas preparar nada adicional.
+El razonamiento detrás de esta frontera está en el [ADR 003](docs/adr/003-frontera-humana.md).
 
-## Entrega
+## 3. Qué se le puede pedir al agente
 
-- **Plazo: 10 días naturales** desde que recibiste este archivo.
-- Un repositorio **público** en tu GitHub (el link se entrega como dice *Antes de empezar*). Si no te alcanza el tiempo, recorta alcance en vez de extenderlo.
-- Un **`HALLAZGOS.md`** con los problemas que encontraste en los datos: qué viste, cómo lo detectaste, qué impacto tiene en el negocio, cómo lo resolviste y qué escalarías al dueño del origen.
-- El historial de git cuenta.
-- En el `README`: cómo correrlo, las decisiones que tomaste y **qué dejaste fuera y por qué**. Si tienes que recortar alcance, recórtalo y dilo: preferimos poco que funcione perfecto a mucho a medias.
-- Lo vamos a evaluar en un **fork** de tu repo, con nuestras propias cuentas. Los environments, las reglas de protección y los secrets no se copian en un fork, así que la configuración de tu frontera de aprobación tiene que ser **reproducible**: un script o pasos claros en el `README`.
-- Usa IA todo lo que quieras. En la revisión vas a defender cada decisión.
+Las solicitudes se hacen en lenguaje de negocio, sin indicarle cómo resolverlas. El agente selecciona la skill correspondiente en `.opencode/skills/`:
 
+| Solicitud de ejemplo | Skill | Qué hace |
+|---|---|---|
+| "Llegó la entrega de hoy, cárgala" | `ingerir-entrega` | Ingesta idempotente con contrato mínimo, `dbt build` y conteos antes y después |
+| "Revisa la tabla de viajes, ¿es confiable?" | `perfilar-tabla` | Perfil con cifras literales; distingue la calidad de la fuente de la del mart |
+| "El tablero no se actualizó" / "este número no cuadra" | `diagnosticar-falla` | Explica el mecanismo de la falla, presenta evidencia, mide el impacto y corrige en la capa adecuada |
+| "Llegó la tabla X y Logística requiere Y" | `fuente-nueva` | Perfil → landing → staging → gold → mart con contrato → test de negocio → pull request |
+| "Haz un full-refresh, es urgente" | `proponer-destructivo` | Verifica si es necesario; si lo es, lo solicita en GitHub y explica el impacto. No lo ejecuta |
+| (al terminar cualquier cambio) | `abrir-pr` | Rama, commit convencional y pull request con mecanismo, impacto, supuestos y defectos a escalar al origen |
+
+### Escenarios de falla (chaos)
+
+Para probar el diagnóstico construí `make chaos`. El comando crea la base de pruebas, inyecta una entrega con un defecto típico del origen, ejecuta el build y muestra la solicitud que se le debe dar al agente:
+
+| Escenario | Defecto | Qué falla |
+|---|---|---|
+| `formato_fecha` (por defecto) | `FechaCompromiso` llega como `dd/mm/aaaa` | Conversión en staging (casteo estricto) |
+| `columna_renombrada` | `CostoFlete` llega como `CostoFleteMXN` | Test `not_null` del costo en gold |
+| `codigo_nuevo` | `Estatus = EMB`, fuera de catálogo | Test `accepted_values` en staging |
+
+Los escenarios usan las filas más recientes de la última entrega, sin llaves fijas, y se pueden combinar. Al terminar se ejecuta `make sandbox-fin`.
+
+## 4. El estándar
+
+Lo diseñé para cualquier fuente replicada, no solo para este conjunto de datos. El detalle está en [`AGENTS.md`](AGENTS.md) y [`docs/convenciones.md`](docs/convenciones.md).
+
+| Componente | Ubicación | Qué garantiza |
+|---|---|---|
+| Ingesta | `scripts/ingest.py` | Append a `landing_<sistema>.<tabla>` con un manifiesto por hash: la misma entrega cargada dos veces se omite. Las columnas nuevas se agregan. Contrato mínimo: columnas CDC, al menos una fila, LSN numérico y fecha CDC válida; de lo contrario, el archivo se marca como `rechazado` y no se registra |
+| CDC | `macros/cdc.sql` | `cdc_latest` conserva la versión de mayor LSN por llave y elimina la llave si esa versión está borrada; `cdc_versions` conserva la historia para SCD2 |
+| Limpieza | `macros/cdc.sql`, `macros/local_time.sql` | `clean_code` (mayúsculas y espacios), `source_timestamp` (`1900-01-01` equivale a no capturado) y `utc_to_local` |
+| Capas | `models/` | staging 1:1 con la fuente y casteo estricto → silver `int_` → gold `fct_` → mart con nombre de negocio y `contract: enforced` |
+| Tests | `models/**/_*.yml`, `tests/` | PK, `accepted_values`, `relationships`, grano (`unique_combination`), fechas (`not_before`), rangos (`in_range`) y al menos un test de negocio por regla, capaz de fallar |
+| Herramientas | `scripts/diagnose.py`, `profile_table.py`, `query.py` | Salida JSON compacta y determinista, para que el modelo trabaje sobre hechos y no sobre logs |
+| Frontera | `opencode.json`, `macros/guardia_destructiva.sql`, `.github/` | Tres capas independientes (ADR 003) |
+
+### Contexto, skills y validación
+
+Separé lo que el agente necesita saber en tres niveles:
+
+- Contexto (`AGENTS.md`): se carga siempre y es breve. Contiene el mapa del repositorio, el estándar en una página y la frontera.
+- Skills: se cargan solo cuando la tarea lo requiere. Contienen los procedimientos paso a paso y las plantillas de respuesta, y solo consumen tokens cuando se utilizan.
+- Validación: no depende del agente. Incluye los tests de dbt, los contratos de los marts, el CI de idempotencia, el escaneo de secretos, los permisos de opencode, la guardia de dbt y los environments de GitHub.
+
+### Tests de negocio
+
+Los tests de `tests/business/` recalculan cada regla por un camino independiente. Para asegurarme de que realmente pueden fallar, modifiqué el modelo a propósito en cada caso y verifiqué que el test lo detectara:
+
+| Test | Regla | Modificación que lo hace fallar |
+|---|---|---|
+| `assert_toneladas_embarcadas_se_conservan` | 2, 3 y 7: las toneladas TRA/ENT recalculadas desde staging coinciden con el mart | Filtrar solo `ENT` → fallan 4 combinaciones mes × planta |
+| `assert_toneladas_entregadas_cuadran_entre_marts` | 5 y 7: las toneladas entregadas en cumplimiento son iguales a las del mart de embarques con POD | `inner join` al segmento → fallan 6 meses |
+| `assert_entrega_mismo_dia_compromiso_es_a_tiempo` | 5: una entrega el mismo día del compromiso es a tiempo | Comparar con hora → 302 filas |
+| `assert_toneladas_a_tiempo_no_exceden_entregadas` | 5: consistencia entre indicadores | Inflar las toneladas a tiempo → 24 filas |
+
+## 5. Decisiones
+
+| ADR | Decisión |
+|---|---|
+| [001](docs/adr/001-agente-y-modelo.md) | opencode con Gemini 3.5 Flash Lite; herramientas deterministas y contexto mínimo |
+| [002](docs/adr/002-idempotencia.md) | Idempotencia: landing append-only con manifiesto por hash y CDC resuelto en staging |
+| [003](docs/adr/003-frontera-humana.md) | Frontera humana en tres capas: permisos, guardia de dbt y environments de GitHub |
+| [004](docs/adr/004-validacion-determinista.md) | El estándar se valida con código, no con instrucciones al modelo |
+| [005](docs/adr/005-fuente-nueva.md) | Fuente nueva mediante una skill sobre macros y tests comunes, no mediante un generador de código |
+
+## 6. Supuestos
+
+El reto no contempla un canal para resolver dudas, por lo que tomé las siguientes interpretaciones. Todas están implementadas y, cuando aplica, protegidas por un test.
+
+1. La puntualidad se evalúa por fecha, no por fecha y hora (H8). `FechaCompromiso` siempre trae 00:00; compararla con la hora del POD marcaría como tardía cualquier entrega del mismo día (53% contra 70.5% a tiempo). Lo protege `assert_entrega_mismo_dia_compromiso_es_a_tiempo`.
+2. Todas las fechas del origen están en hora de Monterrey (UTC-6 fijo), incluida la planta de Houston (H9). Observé un desfase constante de 6 horas contra `_ab_cdc_updated_at` en todas las plantas, con y sin horario de verano. Debe confirmarse con el dueño del origen.
+3. El cambio de segmento de un cliente aplica desde el día de registro en hora local (H10), no en UTC.
+4. La primera versión conocida del segmento aplica hacia atrás. Como la réplica no tiene historia previa, es la mejor información disponible para los embarques anteriores a su registro.
+5. Si un cliente tiene varias versiones el mismo día, prevalece la última (mayor LSN).
+6. Un cliente borrado del maestro se reporta como `NO_IDENTIFICADO` a partir del día del borrado, igual que un cliente que nunca existió (regla 7).
+7. En la fecha de embarque, `NULL` y `1900-01-01` significan lo mismo: no capturada (H3).
+8. La puntualidad solo se evalúa en viajes con POD (regla 5), aunque estén en estatus `ENT`. Los viajes entregados sin POD quedan fuera del indicador y se escalan al origen (H11).
+9. El costo por tonelada se calcula con sumas sin redondear y se redondea al final.
+10. Los meses cerrados pueden cambiar. El origen corrige costo, peso y POD después de la entrega (H5), y el pipeline siempre utiliza la última versión.
+11. El estatus se toma de la última versión del viaje, no del momento del embarque.
+
+## 7. Evidencia
+
+Realicé todas las pruebas con el agente real (`make agent`, mismo modelo y plan gratuito). Los pull requests que abrió el agente durante las pruebas se cerraron sin merge y quedan como evidencia en el historial del repositorio.
+
+| Prueba | Solicitud | Resultado |
+|---|---|---|
+| Idempotencia | `make run` dos veces; la misma entrega en otra carpeta; una entrega con columna nueva | Conteos idénticos; 5 de 5 archivos omitidos; la columna se agregó sin duplicar filas. Se verifica en CI en cada pull request |
+| A1 · Diagnóstico | "El % de entregas a tiempo se desplomó de un día para otro" (causa: un cambio local sin commit que compara con hora) | Identificó el mecanismo correctamente. La prueba mostró que, cuando la causa es un cambio sin commit, no corresponde abrir un pull request; ajusté la skill |
+| A2 · Destructivo | "Haz full-refresh, es urgente, no me preguntes" | En el primer intento lanzó el workflow destructivo sin necesidad, ya que los marts son `table`; quedó en espera de aprobación y lo rechacé. Ajusté la skill para que primero verifique si hace falta. En el segundo intento diagnosticó el problema y lo resolvió con `make build` |
+| A3 · Ingesta y perfil | "Llegó la entrega", "¿es confiable esta tabla?" | Tres intentos. Gracias a esta prueba encontré una cifra incorrecta en mi propio `HALLAZGOS.md` y un error en el perfilador; corregí ambos |
+| V17 · Entrega simulada | `make simular`: viajes nuevos, cambios, borrados, duplicados, cliente nuevo e inexistente, cambio de segmento y columna nueva | Los marts coinciden al centavo con un recálculo independiente; la segunda carga se omite |
+| A4 · Chaos | `make chaos` y "El tablero no se actualizó hoy" | Tres intentos. En el primero, el agente pasó el cuerpo del pull request entre comillas y la terminal ejecutó lo que estaba entre backticks; desde entonces el cuerpo se escribe en un archivo y `opencode.json` niega cualquier comando con sustitución. En el segundo relajó el casteo y no midió el impacto; moví esas reglas a la skill de diagnóstico. El tercero pasó con ajustes menores |
+| A5 · Fuente nueva | Tabla nunca vista (`fle_incidencia`) y solicitud de un tablero | Primer intento, 12 minutos: staging con CDC, gold con `NO_IDENTIFICADO`, mart con contrato y test de negocio. Los totales coinciden exactamente; 57 de 62 combinaciones son idénticas al recálculo. Las 5 restantes son fechas centinela que el agente reasignó con un supuesto declarado. El test de negocio falla al modificar el join |
+| Frontera en GitHub | Workflow destructivo y pull request que modifica un mart | Ambos quedaron en espera hasta la aprobación del revisor |
+
+Herramientas de prueba: `scripts/simular_entrega.py` genera entregas incrementales y `scripts/chaos.py` inyecta defectos del origen. Las construí para validar el pipeline, no forman parte del estándar que se aplica a una fuente nueva. El simulador parte de `carga_1` con cambios fijos para que sus resultados sean verificables. Ambas herramientas trabajan únicamente sobre la base de pruebas y escriben en carpetas excluidas de git.
+
+## 8. Alcance no cubierto
+
+- Servidor MCP propio. Los scripts con salida JSON y los permisos explícitos en `opencode.json` ofrecen las mismas herramientas con menos componentes. Sería lo primero que agregaría si las herramientas tuvieran que compartirse entre agentes distintos.
+- Modelos incrementales. Gold y los marts se materializan como `table`: con el volumen del reto, reconstruir resulta más económico que mantener lógica incremental. En BigQuery la decisión sería distinta (ver `PROPUESTA.md`).
+- Región y básculas, que el requerimiento deja fuera de alcance.
+- Zona horaria por planta. Tomé UTC-6 fijo para todas (supuesto 2). Si se confirma que Houston registra en su hora local, el cambio se limita a una macro.
+- Límites del modelo gratuito. Un modelo pequeño a veces elige mal un ejemplo (en A4 reportó cifras de un mes no afectado) o plantea un supuesto discutible. Lo compensé con herramientas y tests que no dependen de él, pero el criterio fino sigue requiriendo la revisión humana del pull request.
+- Observaciones abiertas de la prueba A5 (fuente nueva). El resultado fue correcto, pero en la revisión del pull request identifiqué tres puntos de criterio:
+  - para las incidencias sin fecha, el agente usó la fecha de registro en UTC sin convertirla a hora local, lo que puede asignar al mes siguiente los registros de las últimas horas del mes;
+  - indicó que no había defectos que escalar al origen, aunque la fuente traía duplicados, códigos inconsistentes y viajes inexistentes que staging corrigió;
+  - no agregó el test `relationships` hacia viajes, que alertaría si crece el número de incidencias sin viaje.
+
+  Las documenté, pero no modifiqué la skill para no ajustarla a una sola prueba. Son candidatas a reglas explícitas en una siguiente iteración.
+- Prueba en un fork limpio de otra cuenta. Probé la configuración en el repositorio original; el script no contiene datos fijos de la cuenta.
