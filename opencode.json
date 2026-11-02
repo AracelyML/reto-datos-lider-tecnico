@@ -62,6 +62,7 @@
       "gh pr create *": "allow",
       "gh pr view *": "allow",
       "gh pr checks *": "allow",
+      "gh auth status": "allow",
       "gh run list*": "allow",
       "gh run view *": "allow",
       "gh run watch *": "allow",
