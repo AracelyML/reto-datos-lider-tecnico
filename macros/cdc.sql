@@ -1,12 +1,13 @@
 {#- Estándar para tablas landing de réplica CDC (Airbyte). -#}
 
-{#- Última versión de cada llave según LSN; descarta llaves cuya última versión está borrada. -#}
+{#- Última versión de cada llave según LSN; descarta llaves cuya última versión está borrada.
+    Varios cambios de una misma transacción comparten LSN: el desempate mantiene el resultado determinista. -#}
 {% macro cdc_latest(relation, key_columns, lsn='_ab_cdc_lsn') -%}
     select *
     from {{ relation }}
     qualify row_number() over (
         partition by {{ key_columns | join(', ') }}
-        order by cast({{ lsn }} as bigint) desc
+        order by cast({{ lsn }} as bigint) desc, _ab_cdc_updated_at desc, _airbyte_extracted_at desc, _entrega desc
     ) = 1
     and _ab_cdc_deleted_at is null
 {%- endmacro %}
@@ -17,7 +18,7 @@
     from {{ relation }}
     qualify row_number() over (
         partition by {{ key_columns | join(', ') }}, {{ lsn }}
-        order by _airbyte_extracted_at desc
+        order by _ab_cdc_updated_at desc, _airbyte_extracted_at desc, _entrega desc
     ) = 1
 {%- endmacro %}
 
