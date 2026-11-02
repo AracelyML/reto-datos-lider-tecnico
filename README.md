@@ -83,11 +83,17 @@ bash scripts/setup_github.sh            # o: bash scripts/setup_github.sh <owner
 
 El script habilita Actions y crea dos environments: `production`, con la variable `APROBACION_DESTRUCTIVA`, y `contract-change`. En ambos queda como revisor el usuario que ejecuta el script. También protege `main`: solo acepta cambios por pull request, exige los checks `idempotencia`, `secretos` y `aprobacion`, y no permite force push, ni siquiera a administradores.
 
+En un equipo, el revisor debe ser una persona distinta de la cuenta que usa el agente. Para eso, `REVISOR=<usuario> bash scripts/setup_github.sh` asigna a ese usuario y activa `prevent_self_review`, de modo que quien lanza un workflow no puede aprobarlo.
+
 Para comprobar que la frontera funciona:
 
 1. Pedirle al agente un full-refresh. Lo máximo que puede hacer es lanzar `destructive.yml`, que queda en *Waiting for review* hasta que alguien lo apruebe en Actions → la ejecución → Review deployments → production.
 2. Abrir un pull request que modifique `models/marts/`. El check `aprobacion` queda pendiente hasta que se aprueba `contract-change`.
 3. En local, `make full-refresh` termina con el mensaje "full-refresh bloqueado", porque falta la variable que solo recibe un job aprobado.
+
+`destructive.yml` es una demostración del flujo de aprobación: el job aprobado reconstruye una base DuckDB en un runner desechable y no modifica datos persistentes. En BigQuery, ese job sería el único que recibe la credencial de escritura a producción, guardada como secret del environment.
+
+Un límite que conviene tener claro: un agente que puede editar modelos y ejecutar dbt puede ejecutar SQL en la base local, por ejemplo con un `pre_hook`. Los permisos de `opencode.json` reducen esa superficie (solo cuatro scripts permitidos por nombre, sin edición de `scripts/` ni de archivos `.py`, sin `dbt run-operation`), pero no la eliminan. La protección real es que la base local es de desarrollo y se reconstruye con `make run`, y que la escritura a producción solo ocurre en CI con aprobación.
 
 El razonamiento detrás de esta frontera está en el [ADR 003](docs/adr/003-frontera-humana.md).
 
