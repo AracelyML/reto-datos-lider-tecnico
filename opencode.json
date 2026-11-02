@@ -70,7 +70,9 @@
       "gh pr merge*": "deny",
       "gh api *": "deny",
       "gh secret *": "deny",
-      "gh variable *": "deny"
+      "gh variable *": "deny",
+      "*`*": "deny",
+      "*$(*": "deny"
     }
   }
 }
