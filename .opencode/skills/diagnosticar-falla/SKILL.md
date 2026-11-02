@@ -12,6 +12,7 @@ El objetivo es el **mecanismo**: qué cambió, por qué eso produce el síntoma 
 1. `make diagnose`. Lee `resumen`, `fallas` y `cambios_sin_commit`.
    - Sin fallas pero el usuario ve algo raro → perfila el mart (`make profile TABLE=mart_logistica.<tabla> PK=<grano>`) y compáralo contra staging con `scripts/query.py`.
 2. **Ubica el origen.** Si hay `cambios_sin_commit`, empieza por `git diff <archivo>`: la causa suele ser código. Si no, es dato: perfila la tabla de landing o staging del `linaje` más cercana al síntoma.
+   - Una entrega en `data/chaos/` o `data/simulada/` (base de pruebas) es **dato del origen**, igual que una de `data/replica/`: el fix va en código (staging o macro) con PR, y el defecto se escala al dueño del origen.
    - **Si la causa es un cambio sin commit, `main` está sano.** No abras PR: explica el mecanismo, recomienda descartar el cambio (`git restore <archivo>`, lo ejecuta la persona) o, si era intencional, corregirlo antes de commitear. Abre PR solo cuando el defecto está en código ya publicado en `main` o en los datos.
 3. **Formula una hipótesis** con el catálogo de abajo y **confírmala con una consulta** (`python scripts/query.py "..."`). No propongas fix sin evidencia.
 4. **Corrige en una rama** `fix/<desc>`, en la capa donde nace el problema (no parches en el mart lo que viene de staging).
@@ -31,7 +32,7 @@ Si el fix requiere full-refresh, borrar datos o cambiar el contrato de un mart �
 | Fan-out por join (vigencias traslapadas, llave incompleta) | `unique_combination` falla; toneladas de más | Consulta: llaves con más de una fila tras el join | Corregir la llave/vigencia `[desde, hasta)` |
 | Zona horaria / fecha vs. fecha-hora | % a tiempo cae; registros cambian de mes o de día | Comparar resultado con `cast(... as date)` y con `utc_to_local` | Comparar fechas en hora local de planta |
 | Contrato roto | Modelo del mart en `error` con tabla `data type mismatch` / columnas faltantes | El mensaje lo dice; `git diff` del modelo | Castear al tipo del contrato. Si el cambio de contrato es intencional → `proponer-destructivo` |
-| Schema drift en la entrega | Error en staging: columna no encontrada; columna nueva en el reporte de ingesta | Reporte de `make ingest` (`columnas_nuevas`); perfil del CSV | Mapear la columna en staging; si se renombró/eliminó en origen, escalar |
+| Schema drift en la entrega | Error en staging: columna no encontrada; columna nueva en el reporte de ingesta | Reporte de `make ingest` (`columnas_nuevas`); perfil del CSV | Mapear la columna en staging; si se renombró/eliminó en origen, escalar. Si la columna nueva no existe en todas las entregas, que staging compile con y sin ella (`adapter.get_columns_in_relation`) |
 | Valor no convertible (casteo estricto) | `Conversion Error` en staging | Perfil de la columna: valores no numéricos/fechas | Limpiar en staging con regla explícita o escalar al dueño del origen; nunca `try_cast` silencioso |
 | Hechos inconsistentes del origen | Entregados sin POD o POD en viajes no entregados | Consulta cruzando estatus y POD | Regla documentada como supuesto + escalar |
 
