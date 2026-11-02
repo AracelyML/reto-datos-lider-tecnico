@@ -8,7 +8,7 @@ description: Ingiere una entrega nueva de la réplica CDC, reconstruye las capas
 La ingesta es idempotente: reingerir una entrega o correr todo dos veces no duplica nada.
 
 1. **Antes:** `make counts` y guarda los conteos de `staging.*` y `mart_logistica.*`.
-2. Verifica con `ls data/replica/*/` que la entrega esté en `data/replica/<entrega>/` con archivos `<prefijo>_<tabla>.csv`. Si está en otra ruta: `python scripts/ingest.py <ruta>`; si no, `make ingest`.
+2. Verifica con `ls data/replica/*/` que la entrega esté en `data/replica/<entrega>/` con archivos `<prefijo>_<tabla>.csv`. Si está en otra ruta: `.venv/bin/python scripts/ingest.py <ruta>`; si no, `make ingest`.
 3. Lee el reporte JSON:
    - `cargado` → filas nuevas; revisa `columnas_nuevas` (schema drift).
    - `omitido` → ya se había cargado (mismo hash): normal en reenvíos.

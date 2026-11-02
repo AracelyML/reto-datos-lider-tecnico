@@ -26,7 +26,9 @@ Esquemas en `deacero.duckdb` (no hace falta explorarlos): `landing` (manifiesto 
 | `make ingest` / `make build` / `make run` / `make counts` | Ingerir, construir y testear, ambos, conteos por tabla |
 | `make diagnose` | `dbt build` + resumen de fallas: regla, capa, linaje, muestra, cambios sin commit |
 | `make profile TABLE=<csv o esquema.tabla> PK=<col1,col2>` | Perfil de una tabla |
-| `python scripts/query.py "<select>"` | Consulta de solo lectura (máx. 50 filas) para confirmar una hipótesis |
+| `.venv/bin/python scripts/query.py "<select>"` | Consulta de solo lectura (máx. 50 filas) para confirmar una hipótesis |
+
+Python y dbt siempre con la ruta del proyecto: `.venv/bin/python` y `.venv/bin/dbt` (o `make`). `python`, `python3` o `dbt` sin ruta pueden no existir o ser otra versión.
 
 ## Qué skill usar
 
