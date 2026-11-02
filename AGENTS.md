@@ -28,7 +28,7 @@ Esquemas en `deacero.duckdb` (no hace falta explorarlos): `landing` (manifiesto 
 | `make profile TABLE=<csv o esquema.tabla> PK=<col1,col2>` | Perfil de una tabla |
 | `.venv/bin/python scripts/query.py "<select>"` | Consulta de solo lectura (máx. 50 filas) para confirmar una hipótesis |
 
-Python y dbt siempre con la ruta del proyecto: `.venv/bin/python` y `.venv/bin/dbt` (o `make`). `python`, `python3` o `dbt` sin ruta pueden no existir o ser otra versión.
+Python y dbt siempre con la ruta del proyecto: `.venv/bin/python` y `.venv/bin/dbt` (o `make`). `python`, `python3` o `dbt` sin ruta pueden no existir o ser otra versión. Archivos siempre con ruta relativa a la raíz del repositorio (`models/staging/stg_fle__viajes.sql`), nunca absoluta: fuera del proyecto no tienes acceso.
 
 ## Qué skill usar
 
