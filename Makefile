@@ -1,3 +1,4 @@
+PYTHON ?= python3
 PY := .venv/bin/python
 DBT := .venv/bin/dbt --no-use-colors
 export DBT_PROFILES_DIR := .
@@ -10,8 +11,10 @@ export DUCKDB_PATH
 
 .PHONY: setup ingest build run counts diagnose profile agent full-refresh reset-landing sandbox simular chaos sandbox-fin
 
+# dbt-core 1.12 requiere Python 3.10 o superior.
 setup:
-	python3 -m venv .venv
+	@$(PYTHON) -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else "Se requiere Python 3.10 o superior (encontrado %d.%d). Usa: make setup PYTHON=python3.12" % sys.version_info[:2])'
+	$(PYTHON) -m venv .venv
 	$(PY) -m pip install -r requirements.txt
 
 ingest:
