@@ -8,7 +8,7 @@ SELECT ?= marts
 DUCKDB_PATH ?= $(shell cat .sandbox 2>/dev/null || echo deacero.duckdb)
 export DUCKDB_PATH
 
-.PHONY: setup ingest build run counts diagnose profile agent full-refresh reset-landing sandbox simular sandbox-fin
+.PHONY: setup ingest build run counts diagnose profile agent full-refresh reset-landing sandbox simular chaos sandbox-fin
 
 setup:
 	python3 -m venv .venv
@@ -57,6 +57,15 @@ simular:
 	$(PY) scripts/ingest.py data/simulada/carga_2
 	$(DBT) build
 	@$(MAKE) --no-print-directory counts
+
+# Inyecta una entrega con un defecto del origen en la base de pruebas (la crea si no existe).
+ESCENARIO ?= formato_fecha
+chaos:
+	@test -f .sandbox || $(MAKE) --no-print-directory sandbox
+	@DUCKDB_PATH=$$(cat .sandbox) $(PY) scripts/chaos.py $(ESCENARIO)
+	@DUCKDB_PATH=$$(cat .sandbox) $(DBT) build > logs/chaos_build.log 2>&1 \
+		&& echo "El pipeline pasó: revisa el escenario." \
+		|| echo "El pipeline ahora falla (detalle en logs/chaos_build.log). Abre el agente y pásale el pedido de arriba. Al terminar: make sandbox-fin"
 
 sandbox-fin:
 	rm -f sandbox.duckdb sandbox.duckdb.wal .sandbox
