@@ -3,6 +3,7 @@
   "model": "google/gemini-3.5-flash-lite",
   "small_model": "google/gemini-3.5-flash-lite",
   "permission": {
+    "external_directory": "deny",
     "skill": {
       "*": "deny",
       "ingerir-entrega": "allow",
