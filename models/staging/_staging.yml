@@ -62,7 +62,15 @@ models:
     description: Catálogo de plantas, última versión.
     columns:
       - name: cla_planta
-        data_tests: [unique, not_null]
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('zona_horaria_planta')
+                field: cla_planta
+              config:
+                severity: warn
       - name: nom_planta
         data_tests: [not_null]
 

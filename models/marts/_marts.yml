@@ -32,6 +32,8 @@ models:
               arguments:
                 min_value: 100
                 max_value: 3000
+              config:
+                severity: warn
 
   - name: cumplimiento_entrega
     description: Porcentaje de toneladas entregadas a tiempo por segmento del cliente y mes de embarque. Contrato publicado para BI.

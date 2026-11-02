@@ -9,7 +9,8 @@ Llevas tablas replicadas (Airbyte CDC) hasta marts con calidad de producción, s
 | `data/replica/<entrega>/` | Entregas CSV de la réplica (una carpeta por entrega) |
 | `scripts/ingest.py` | Ingesta idempotente a `landing_*` (manifiesto por hash) |
 | `models/staging` → `silver` → `gold` → `marts` | Capas dbt (ver `docs/convenciones.md`) |
-| `macros/cdc.sql`, `macros/local_time.sql` | Macros estándar: `cdc_latest`, `cdc_versions`, `clean_code`, `source_timestamp`, `utc_to_local` |
+| `macros/cdc.sql`, `macros/local_time.sql` | Macros estándar: `cdc_latest`, `cdc_versions`, `clean_code`, `source_timestamp`, `utc_to_local`, `hora_local_planta` |
+| `seeds/zona_horaria_planta.csv` | Zona horaria IANA por planta; una planta nueva se agrega aquí |
 | `tests/business/`, `tests/generic/` | Tests de reglas de negocio y genéricos (`not_before`, `unique_combination`, `in_range`) |
 | `docs/` | Requerimiento, contrato de marts, diccionario de landing, convenciones |
 | `HALLAZGOS.md` | Problemas reales de los datos ya conocidos y cómo se resolvieron |
@@ -42,7 +43,7 @@ Esquemas en `deacero.duckdb` (no hace falta explorarlos): `landing` (manifiesto 
 
 - **Capas:** staging = 1:1 con la fuente (tipar, renombrar, limpiar, deduplicar; sin lógica de negocio). silver `int_` = lógica reutilizable. gold `fct_`/`dim_`. mart = nombre de negocio, `contract: enforced`.
 - **CDC:** la versión vigente es la de mayor `_ab_cdc_lsn` por llave; si esa versión tiene `_ab_cdc_deleted_at`, la llave se elimina. Usa `cdc_latest`; para historia, `cdc_versions`.
-- **Limpieza:** códigos con `clean_code`; fechas con `source_timestamp` (1900-01-01 = no capturada); `_ab_cdc_updated_at` es UTC → `utc_to_local` para reglas de negocio por día.
+- **Limpieza:** códigos con `clean_code`; fechas con `source_timestamp` (1900-01-01 = no capturada); `_ab_cdc_updated_at` es UTC → `utc_to_local` para reglas de negocio por día; las fechas del origen vienen en hora de Monterrey → `hora_local_planta` para reportar en hora local de planta.
 - **Casteo estricto** en staging: un valor inválido debe romper y explicarse, nunca `try_cast` que lo vuelva nulo en silencio.
 - **Nunca perder filas en joins** hacia dimensiones: `left join` + valor explícito (`NO_IDENTIFICADO`).
 - **Tests mínimos:** PK `unique`+`not_null` en staging, `accepted_values` en códigos, `relationships`, grano con `unique_combination`, y al menos un test de negocio por regla del requerimiento que **pueda fallar**.

@@ -40,6 +40,7 @@ Conteos esperados con `carga_1`:
 | `staging.stg_fle__entregas` | 1,714 |
 | `staging.stg_opc__plantas` | 4 |
 | `staging.stg_vta__clientes_versiones` | 106 |
+| `staging.zona_horaria_planta` (seed) | 4 |
 | `silver_logistica.int_clientes__segmento_vigencia` | 106 |
 | `gold_logistica.fct_embarques` | 1,773 |
 | `gold_logistica.fct_embarque_partidas` | 3,683 |
@@ -130,9 +131,9 @@ Lo diseñé para cualquier fuente replicada, no solo para este conjunto de datos
 |---|---|---|
 | Ingesta | `scripts/ingest.py` | Append a `landing_<sistema>.<tabla>` con un manifiesto por hash: la misma entrega cargada dos veces se omite. Las columnas nuevas se agregan. Contrato mínimo: columnas CDC, al menos una fila, LSN numérico y fecha CDC válida; de lo contrario, el archivo se marca como `rechazado` y no se registra |
 | CDC | `macros/cdc.sql` | `cdc_latest` conserva la versión de mayor LSN por llave y elimina la llave si esa versión está borrada; `cdc_versions` conserva la historia para SCD2 |
-| Limpieza | `macros/cdc.sql`, `macros/local_time.sql` | `clean_code` (mayúsculas y espacios), `source_timestamp` (`1900-01-01` equivale a no capturado) y `utc_to_local` |
+| Limpieza | `macros/cdc.sql`, `macros/local_time.sql` | `clean_code` (mayúsculas y espacios), `source_timestamp` (`1900-01-01` equivale a no capturado), `utc_to_local` (UTC a hora de Monterrey) y `hora_local_planta` (hora de Monterrey a la zona de cada planta, según `seeds/zona_horaria_planta.csv`) |
 | Capas | `models/` | staging 1:1 con la fuente y casteo estricto → silver `int_` → gold `fct_` → mart con nombre de negocio y `contract: enforced` |
-| Tests | `models/**/_*.yml`, `tests/` | PK, `accepted_values`, `relationships`, grano (`unique_combination`), fechas (`not_before`), rangos (`in_range`) y al menos un test de negocio por regla, capaz de fallar |
+| Tests | `models/**/_*.yml`, `seeds/_seeds.yml`, `tests/` | PK, `accepted_values`, `relationships`, grano (`unique_combination`), fechas (`not_before`), rangos (`in_range`), integridad entre tablas (`tests/integridad/`) y al menos un test de negocio por regla, capaz de fallar |
 | Herramientas | `scripts/diagnose.py`, `profile_table.py`, `query.py` | Salida JSON compacta y determinista, para que el modelo trabaje sobre hechos y no sobre logs |
 | Frontera | `opencode.json`, `macros/guardia_destructiva.sql`, `.github/` | Tres capas independientes (ADR 003) |
 
@@ -170,7 +171,7 @@ Los tests de `tests/business/` recalculan cada regla por un camino independiente
 El reto no contempla un canal para resolver dudas, por lo que tomé las siguientes interpretaciones. Todas están implementadas y, cuando aplica, protegidas por un test.
 
 1. La puntualidad se evalúa por fecha, no por fecha y hora (H8). `FechaCompromiso` siempre trae 00:00; compararla con la hora del POD marcaría como tardía cualquier entrega del mismo día (53% contra 70.5% a tiempo). Lo protege `assert_entrega_mismo_dia_compromiso_es_a_tiempo`.
-2. Todas las fechas del origen están en hora de Monterrey (UTC-6 fijo), incluida la planta de Houston (H9). Observé un desfase constante de 6 horas contra `_ab_cdc_updated_at` en todas las plantas, con y sin horario de verano. Debe confirmarse con el dueño del origen.
+2. El origen registra todas las fechas en hora de Monterrey (UTC-6 fijo), incluida la planta de Houston (H9): observé un desfase constante de 6 horas contra `_ab_cdc_updated_at` en todas las plantas, con y sin horario de verano. Como la regla 1 pide agrupar en hora local de planta, las fechas de embarque y entrega se convierten en gold a la zona de cada planta (`seeds/zona_horaria_planta.csv`; Houston → `America/Chicago`, zona Central de EE. UU.). Con `carga_1` la conversión no cambia ninguna cifra de los marts. Debe confirmarse con el dueño del origen.
 3. El cambio de segmento de un cliente aplica desde el día de registro en hora local (H10), no en UTC.
 4. La primera versión conocida del segmento aplica hacia atrás. Como la réplica no tiene historia previa, es la mejor información disponible para los embarques anteriores a su registro.
 5. Si un cliente tiene varias versiones el mismo día, prevalece la última (mayor LSN).
@@ -180,6 +181,8 @@ El reto no contempla un canal para resolver dudas, por lo que tomé las siguient
 9. El costo por tonelada se calcula con sumas sin redondear y se redondea al final.
 10. Los meses cerrados pueden cambiar. El origen corrige costo, peso y POD después de la entrega (H5), y el pipeline siempre utiliza la última versión.
 11. El estatus se toma de la última versión del viaje, no del momento del embarque.
+12. `_ab_cdc_lsn` llega como número, como en `carga_1`. En SQL Server, Airbyte puede entregarlo en hexadecimal; en ese caso el contrato de ingesta rechazaría la entrega completa y habría que convertirlo en la ingesta. Cuando varios cambios comparten LSN (misma transacción), `cdc_latest` desempata por `_ab_cdc_updated_at`, `_airbyte_extracted_at` y la entrega, para que el resultado sea determinista.
+13. El rango de `costo_flete_por_ton` (100 a 3,000 MXN) es una alerta (`warn`), no un error: una entrega legítima puede salir del rango y no debe detener el tablero. `pct_a_tiempo` (0 a 100) sí es un error, porque es un límite matemático.
 
 ## 7. Evidencia
 
@@ -203,7 +206,7 @@ Herramientas de prueba: `scripts/simular_entrega.py` genera entregas incremental
 - Servidor MCP propio. Los scripts con salida JSON y los permisos explícitos en `opencode.json` ofrecen las mismas herramientas con menos componentes. Sería lo primero que agregaría si las herramientas tuvieran que compartirse entre agentes distintos.
 - Modelos incrementales. Gold y los marts se materializan como `table`: con el volumen del reto, reconstruir resulta más económico que mantener lógica incremental. En BigQuery la decisión sería distinta (ver `PROPUESTA.md`).
 - Región y básculas, que el requerimiento deja fuera de alcance.
-- Zona horaria por planta. Tomé UTC-6 fijo para todas (supuesto 2). Si se confirma que Houston registra en su hora local, el cambio se limita a una macro.
+- Cuarentena de filas inválidas. El casteo estricto en staging detiene el build con una sola fila mala; los marts conservan su última versión correcta, pero no se actualizan hasta corregir. Con más fuentes y consumidores, separaría las filas que no convierten en una tabla de cuarentena (o usaría `store_failures` de dbt) para que el resto siga fluyendo, con una alerta.
 - Límites del modelo gratuito. Un modelo pequeño a veces elige mal un ejemplo (en A4 reportó cifras de un mes no afectado) o plantea un supuesto discutible. Lo compensé con herramientas y tests que no dependen de él, pero el criterio fino sigue requiriendo la revisión humana del pull request.
 - Observaciones abiertas de la prueba A5 (fuente nueva). El resultado fue correcto, pero en la revisión del pull request identifiqué tres puntos de criterio:
   - para las incidencias sin fecha, el agente usó la fecha de registro en UTC sin convertirla a hora local, lo que puede asignar al mes siguiente los registros de las últimas horas del mes;

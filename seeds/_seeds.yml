@@ -1,0 +1,16 @@
+version: 2
+
+seeds:
+  - name: zona_horaria_planta
+    description: >
+      Zona horaria IANA de cada planta, para reportar en hora local de planta (regla 1).
+      Una planta nueva sin zona usa la hora de Monterrey y el test de staging avisa.
+    config:
+      column_types:
+        cla_planta: integer
+        zona_horaria: varchar
+    columns:
+      - name: cla_planta
+        data_tests: [unique, not_null]
+      - name: zona_horaria
+        data_tests: [not_null]

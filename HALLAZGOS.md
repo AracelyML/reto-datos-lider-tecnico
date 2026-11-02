@@ -17,7 +17,7 @@ Problemas encontrados en la réplica que no estaban en la documentación. Cada u
 | H6 | Viajes borrados en el origen | fle_viaje | Toneladas de viajes que no existen | Excluir borrados | No |
 | H7 | Partidas con clientes inexistentes en el maestro | fle_viaje_det | ~1,006 t sin segmento | `NO_IDENTIFICADO` | Sí |
 | H8 | Compromiso es solo fecha; entrega trae hora | fle_viaje, fle_entrega | % a tiempo: 53% vs 70.5% | Comparar por fecha (supuesto) | Confirmar |
-| H9 | Fechas en UTC-6 fijo en todas las plantas, incluida Houston | todas | Bajo; posible desfase en fronteras de mes | Tratar como hora Monterrey | Confirmar |
+| H9 | Fechas en UTC-6 fijo en todas las plantas, incluida Houston | todas | Bajo; posible desfase en fronteras de mes | Convertir a hora local de planta (Houston: `America/Chicago`) | Confirmar |
 | H10 | Cambio de segmento registrado en otro día UTC que local | vta_cliente | Segmento equivocado en el día del cambio | Día de registro en hora local | No |
 | H11 | Viajes entregados sin POD y un viaje en tránsito con POD | fle_viaje, fle_entrega | Cobertura del indicador | Evaluar solo con POD | Sí |
 | H12 | Una sola fecha de extracción en toda la carga | todas | Idempotencia | Controlar por LSN | No |
@@ -69,7 +69,7 @@ Problemas encontrados en la réplica que no estaban en la documentación. Cada u
 - **Qué vi:** 24 viajes con `_ab_cdc_deleted_at`, todos en tránsito, con 52 partidas y sin POD.
 - **Cómo lo detecté:** conteo de `_ab_cdc_deleted_at` en la última versión de cada llave.
 - **Impacto:** si no se excluyen, se reportan toneladas de viajes que ya no existen.
-- **Resolución:** se excluyen los viajes cuya última versión está borrada, junto con sus partidas.
+- **Resolución:** se excluyen los viajes cuya última versión está borrada, junto con sus partidas. Como el origen no borra las partidas, la relación partidas → viajes no puede ser un `relationships` estricto; el test `assert_partidas_sin_viaje_solo_por_borrado` acepta solo las partidas de viajes borrados y falla si una partida apunta a un viaje que nunca existió.
 
 ## H7 · Partidas con clientes inexistentes en el maestro
 
@@ -91,9 +91,9 @@ Problemas encontrados en la réplica que no estaban en la documentación. Cada u
 
 - **Qué vi:** la diferencia entre `FechaRealEmbarque` (local) y `_ab_cdc_updated_at` (UTC) es siempre de 6 h más un retraso de captura de 5 a 90 min, en las cuatro plantas y con o sin horario de verano en EE.UU.
 - **Cómo lo detecté:** diferencia en minutos en la versión donde el viaje pasa a tránsito, agrupada por planta y por periodo de horario de verano.
-- **Impacto:** bajo. El diccionario dice "hora local de planta (America/Monterrey)" y los datos lo confirman, aunque Houston opere en otra zona. Solo afectaría a viajes cerca de la medianoche de fin de mes.
-- **Resolución:** todas las fechas se tratan como hora de Monterrey; no se convierte.
-- **Escalar:** confirmar si para Houston el negocio espera su hora local.
+- **Impacto:** bajo. El diccionario dice "hora local de planta (America/Monterrey)" y los datos lo confirman: el origen registra en hora de Monterrey aunque Houston opere en otra zona. La regla 1 del requerimiento pide agrupar en hora local de planta, y en horario de verano de EE. UU. Houston va una hora adelante de Monterrey. Con `carga_1`, la conversión recorre una hora 146 viajes de Houston, cambia de día 9 entregas y no cambia de mes ningún embarque ni la puntualidad de ningún viaje: los dos marts quedan idénticos. Sí afectaría a un embarque de Houston registrado después de las 23:00 del último día de un mes de verano.
+- **Resolución:** inicialmente se trató todo como hora de Monterrey. Tras una revisión externa se agregó la tabla `seeds/zona_horaria_planta.csv` (planta → zona IANA; Houston → `America/Chicago`, la zona Central de EE. UU.) y la macro `hora_local_planta`, que convierte las fechas de embarque y entrega en gold. Una planta nueva sin zona registrada queda en hora de Monterrey y un test con severidad `warn` lo avisa.
+- **Escalar:** confirmar con el dueño del origen que Houston captura en hora de Monterrey y con Logística que su reporte se espera en hora de Houston.
 
 ## H10 · Cambio de segmento registrado en otro día UTC que local
 

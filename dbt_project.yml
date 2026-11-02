@@ -28,3 +28,7 @@ models:
       +materialized: table
       +contract:
         enforced: true
+
+seeds:
+  reto_datos:
+    +schema: staging
