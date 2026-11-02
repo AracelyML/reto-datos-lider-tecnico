@@ -21,13 +21,15 @@ El enunciado original del reto se encuentra en [`docs/reto.md`](docs/reto.md).
 
 ## 1. Cómo ejecutarlo
 
-Requisitos: Python 3.9 o superior (lo probé con 3.12), Git, [opencode](https://opencode.ai) 1.19.x, una llave gratuita de Gemini ([Google AI Studio](https://aistudio.google.com/apikey), no requiere tarjeta) y, para la frontera humana, [`gh`](https://cli.github.com) autenticado.
+Requisitos: Python 3.10 o superior (lo probé con 3.12), Git, [opencode](https://opencode.ai) 1.19.x, una llave gratuita de Gemini ([Google AI Studio](https://aistudio.google.com/apikey), no requiere tarjeta) y, para la frontera humana, [`gh`](https://cli.github.com) autenticado.
 
 ```bash
 make setup                       # crea .venv e instala dbt-core + dbt-duckdb
 make run                         # ingiere data/replica/*, dbt build (modelos + tests), conteos
 make run                         # segunda ejecución: todo omitido, mismos conteos
 ```
+
+En macOS, el `python3` del sistema es 3.9 y no es compatible con dbt-core 1.12. En ese caso, `make setup` se detiene con un aviso; basta con indicar otra versión instalada, por ejemplo `make setup PYTHON=python3.12`.
 
 Conteos esperados con `carga_1`:
 
