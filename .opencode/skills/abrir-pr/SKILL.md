@@ -27,6 +27,4 @@ description: Publica un cambio terminado como Pull Request siguiendo el flujo de
 Sí/No. Si sí, el check `aprobacion` pedirá aprobación humana antes del merge.
 ```
 
-El fix cambia solo lo necesario para el defecto: no relajes el casteo estricto (vacíos, nulos, otros formatos) si el diagnóstico no lo pide.
-
 7. Responde con la URL del PR y `gh pr checks <n>` cuando terminen. **No hagas merge**: lo decide una persona.
