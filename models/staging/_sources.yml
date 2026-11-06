@@ -15,3 +15,8 @@ sources:
     description: Réplica Airbyte CDC del sistema de operaciones.
     tables:
       - name: opc_planta
+  - name: landing_bas
+    description: Réplica Airbyte CDC del sistema de básculas.
+    tables:
+      - name: bas_bascula
+      - name: bas_pesaje
