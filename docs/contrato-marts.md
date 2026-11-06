@@ -32,4 +32,4 @@ Tipos: `texto`, `entero`, `decimal`. Redondeo: toneladas a 3 decimales, dinero y
 | `segmento_cliente` | texto | `DISTRIBUIDOR`, `CONSTRUCTORA`, `INDUSTRIAL` o `NO_IDENTIFICADO`. Segmento vigente el día del embarque. |
 | `toneladas_entregadas` | decimal | Toneladas de partidas cuyo viaje ya tiene POD. |
 | `toneladas_a_tiempo` | decimal | De las anteriores, las entregadas a tiempo. |
-| `pct_a_tiempo` | decimal | `100 * toneladas_a_tiempo / toneladas_entregadas` (0 a 100). |
+| `pct_a_tiempo` | decimal | `toneladas_a_tiempo / toneladas_entregadas` (proporción 0 a 1). |
