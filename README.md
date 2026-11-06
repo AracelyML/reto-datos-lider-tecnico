@@ -182,7 +182,7 @@ El reto no contempla un canal para resolver dudas, por lo que tomé las siguient
 10. Los meses cerrados pueden cambiar. El origen corrige costo, peso y POD después de la entrega (H5), y el pipeline siempre utiliza la última versión.
 11. El estatus se toma de la última versión del viaje, no del momento del embarque.
 12. `_ab_cdc_lsn` llega como número, como en `carga_1`. En SQL Server, Airbyte puede entregarlo en hexadecimal; en ese caso el contrato de ingesta rechazaría la entrega completa y habría que convertirlo en la ingesta. Cuando varios cambios comparten LSN (misma transacción), `cdc_latest` desempata por `_ab_cdc_updated_at`, `_airbyte_extracted_at` y la entrega, para que el resultado sea determinista.
-13. El rango de `costo_flete_por_ton` (100 a 3,000 MXN) es una alerta (`warn`), no un error: una entrega legítima puede salir del rango y no debe detener el tablero. `pct_a_tiempo` (0 a 100) sí es un error, porque es un límite matemático.
+13. El rango de `costo_flete_por_ton` (100 a 3,000 MXN) es una alerta (`warn`), no un error: una entrega legítima puede salir del rango y no debe detener el tablero. `pct_a_tiempo` (0 a 1) sí es un error, porque es un límite matemático.
 
 ## 7. Evidencia
 
