@@ -64,3 +64,54 @@ models:
               arguments:
                 min_value: 0
                 max_value: 100
+
+  - name: estancia_bascula
+    description: Tiempo de estancia de camiones entre báscula de entrada y salida por báscula. Contrato publicado para BI.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ['cla_planta', 'cla_bascula']
+    columns:
+      - name: cla_planta
+        data_type: integer
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: cla_bascula
+        data_type: integer
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: nom_bascula
+        data_type: varchar
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: num_viajes
+        data_type: integer
+      - name: estancia_promedio_min
+        data_type: decimal(18, 2)
+
+  - name: discrepancia_peso
+    description: Viajes con discrepancia de peso entre báscula y documentado (>2%) por mes y planta. Contrato publicado para BI.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ['anio_mes', 'cla_planta']
+    columns:
+      - name: anio_mes
+        data_type: varchar
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: cla_planta
+        data_type: integer
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: num_viajes_pesados
+        data_type: integer
+      - name: num_viajes_con_discrepancia
+        data_type: integer
+      - name: pct_viajes_con_discrepancia
+        data_type: decimal(18, 2)
+        data_tests:
+          - in_range:
+              arguments:
+                min_value: 0
+                max_value: 100

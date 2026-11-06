@@ -89,3 +89,43 @@ models:
           - accepted_values:
               arguments:
                 values: ['DISTRIBUIDOR', 'CONSTRUCTORA', 'INDUSTRIAL']
+
+  - name: stg_bas__basculas
+    description: Catálogo de básculas, última versión.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ['cla_planta', 'cla_bascula']
+    columns:
+      - name: cla_planta
+        data_tests: [not_null]
+      - name: cla_bascula
+        data_tests: [not_null]
+      - name: nom_bascula
+        data_tests: [not_null]
+
+  - name: stg_bas__pesajes
+    description: Última versión de cada pesaje en báscula.
+    columns:
+      - name: id_pesaje
+        data_tests: [unique, not_null]
+      - name: cla_planta
+        data_tests: [not_null]
+      - name: cla_bascula
+        data_tests: [not_null]
+      - name: id_viaje
+        data_tests: [not_null]
+      - name: tipo_pesaje
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['E', 'S']
+      - name: unidad_peso
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['KG', 'LB']
+      - name: peso
+        data_tests: [not_null]
